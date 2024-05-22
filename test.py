@@ -1,43 +1,43 @@
-from langchain_community.chat_models import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
-from langchain.schema import StrOutputParser
-from langchain.schema.runnable import Runnable
-from langchain.schema.runnable.config import RunnableConfig
-
 import chainlit as cl
+from langchain.chains import ConversationChain
+from langchain.chat_models import ChatOpenAI
+from langchain.memory import ConversationSummaryMemory 
+from langchain.memory import ConversationSummaryMemory 
+from langchain.chains import ConversationChain 
+from langchain.memory import ConversationSummaryMemory
+from langchain.chains import ConversationChain 
+
+chat = ChatOpenAI(
+    model="gpt-4o",
+    streaming=True
+)
+
+#ConversationSummaryMemoryを使用するように変更
+memory = ConversationSummaryMemory(  
+    llm=chat,
+    return_messages=True,
+)
+
+chain = ConversationChain(
+    memory=memory,
+    llm=chat,
+)
 
 @cl.on_chat_start
 async def on_chat_start():
-    model = ChatOpenAI(
-        model="gpt-4o",
-        streaming=True
-    )
-    #
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                "あなたはウォーレン・バフェット並みに優秀な投資家です、投資のアドバイスをしてください。",
-            ),
-            ("human", "{question}"),
-        ]
-    )
-    #
-    runnable = prompt | model | StrOutputParser()
-    #
-    cl.user_session.set("runnable", runnable)
-
+    await cl.Message(content="私は会話の文脈を考慮した返答をできるチャットボットです。メッセージを入力してください。").send()
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    runnable = cl.user_session.get("runnable")  # type: Runnable
+    #保存されているメッセージを取得する
+    messages = chain.memory.load_memory_variables({})["history"]
 
-    msg = cl.Message(content="")
+    print(f"保存されているメッセージの数: {len(messages)}")
+    #保存されているメッセージを1つずつ取り出す
+    for saved_message in messages:
+        #保存されているメッセージを表示する
+        print(saved_message.content)
 
-    async for chunk in runnable.astream(
-        {"question": message.content},
-        config=RunnableConfig(callbacks=[cl.LangchainCallbackHandler()]),
-    ):
-        await msg.stream_token(chunk)
+    result = chain(message.content)
 
-    await msg.send()
+    await cl.Message(content=result["response"]).send()
